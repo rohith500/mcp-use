@@ -130,11 +130,12 @@ describe("MCPServer.listen lifecycle and concurrency", () => {
     const { port } = await server.listen(0);
     expect(await isPortOpen(port)).toBe(true);
 
-    // Establish and synchronize on a confirmed active socket connection
+    // Establish a confirmed active connection that the server has accepted and responded to
     const socket = net.connect(port, "127.0.0.1");
     await new Promise<void>((resolve, reject) => {
-      socket.once("connect", () => resolve());
+      socket.once("data", () => resolve());
       socket.once("error", reject);
+      socket.write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
     });
 
     const socketClosed = new Promise<void>((resolve) => {
