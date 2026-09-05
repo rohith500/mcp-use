@@ -222,8 +222,10 @@ export abstract class BaseAdapter<T> {
     }
 
     try {
-      // Get prompts from connector
-      const promptsResult = await connector.listPrompts();
+      // Get prompts from connector (using listAllPrompts if available for complete pagination)
+      const promptsResult = connector.listAllPrompts
+        ? await connector.listAllPrompts()
+        : await connector.listPrompts();
       const prompts = promptsResult?.prompts || [];
 
       // Convert and collect prompts

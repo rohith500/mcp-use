@@ -1241,7 +1241,10 @@ export function useMcp(options: UseMcpInternalOptions): UseMcpResult {
               addLog("warn", "Failed to load initial resources:", error);
               return { resources: [] };
             }),
-            connection.listPrompts().catch((error) => {
+            (typeof connection.listAllPrompts === "function"
+              ? connection.listAllPrompts()
+              : connection.listPrompts()
+            ).catch((error) => {
               addLog("warn", "Failed to load initial prompts:", error);
               return { prompts: [] };
             }),

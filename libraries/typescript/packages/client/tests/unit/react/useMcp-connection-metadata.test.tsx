@@ -538,4 +538,19 @@ describe("useMcp connection metadata", () => {
       vi.useRealTimers();
     }
   });
+
+  it("loads complete prompts inventory via listAllPrompts when available", async () => {
+    const paginatedPrompts = [
+      { name: "prompt-1", description: "First page" },
+      { name: "prompt-2", description: "Second page" },
+    ];
+    const { result } = await renderFor("modern", false, {}, (connection) => {
+      (connection as any).listAllPrompts = vi
+        .fn()
+        .mockResolvedValue({ prompts: paginatedPrompts });
+    });
+
+    expect(result.state).toBe("ready");
+    expect(result.prompts).toEqual(paginatedPrompts);
+  });
 });

@@ -575,9 +575,11 @@ export class MCPConnection {
   }
 
   /**
-   * List available prompts from the server.
+   * List available prompts from the server with optional pagination.
    *
-   * @returns List of available prompts
+   * @param cursor - Optional cursor for pagination
+   * @param options - Request options
+   * @returns List of available prompts with optional nextCursor
    *
    * @example
    * ```typescript
@@ -585,8 +587,24 @@ export class MCPConnection {
    * console.log(`Available prompts: ${result.prompts.length}`);
    * ```
    */
-  async listPrompts() {
-    return this.connector.listPrompts();
+  async listPrompts(cursor?: string, options?: RequestOptions) {
+    return this.connector.listPrompts(cursor, options);
+  }
+
+  /**
+   * List all prompts from the server, automatically handling pagination.
+   *
+   * @param options - Request options
+   * @returns Complete list of all prompts
+   *
+   * @example
+   * ```typescript
+   * const result = await session.listAllPrompts();
+   * console.log(`Total prompts: ${result.prompts.length}`);
+   * ```
+   */
+  async listAllPrompts(options?: RequestOptions) {
+    return this.connector.listAllPrompts(options);
   }
 
   /**

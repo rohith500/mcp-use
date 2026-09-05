@@ -174,7 +174,9 @@ export function useMcpOperations(params: Params) {
     const connection = requireConnection(params, "list prompts");
     params.addLog("info", "Listing prompts");
     const result = await executeWithAuthorizationSignal(params, () =>
-      connection.listPrompts()
+      typeof connection.listAllPrompts === "function"
+        ? connection.listAllPrompts()
+        : connection.listPrompts()
     );
     params.setPrompts(result.prompts || []);
   }, [params.addLog, params.onAuthorizationRequired]);
@@ -211,7 +213,9 @@ export function useMcpOperations(params: Params) {
       return;
     try {
       const result = await executeWithAuthorizationSignal(params, () =>
-        params.connectionRef.current!.listPrompts()
+        typeof params.connectionRef.current!.listAllPrompts === "function"
+          ? params.connectionRef.current!.listAllPrompts()
+          : params.connectionRef.current!.listPrompts()
       );
       params.setPrompts(result.prompts || []);
     } catch (error) {

@@ -869,11 +869,13 @@ export abstract class BaseConnector {
   }
 
   /**
-   * Lists prompts exposed by the server.
+   * Lists prompts exposed by the server with optional pagination.
    *
+   * @param cursor - Optional cursor for pagination
+   * @param options - Request options
    * @returns The prompt list, or an empty list when prompts are unsupported.
    */
-  async listPrompts() {
+  async listPrompts(cursor?: string, options?: RequestOptions) {
     if (!this.client) {
       throw new Error("MCP client is not connected");
     }
@@ -885,8 +887,75 @@ export abstract class BaseConnector {
     }
 
     try {
-      logger.debug("Listing prompts");
-      return await this.executeRequest(() => this.client!.listPrompts());
+      logger.debug("Listing prompts", cursor ? `with cursor: ${cursor}` : "");
+      return await this.executeRequest(() =>
+        this.client!.listPrompts(
+          cursor !== undefined ? { cursor } : undefined,
+          options
+        )
+      );
+    } catch (err: unknown) {
+      const error = err as Error & { code?: number };
+      // Gracefully handle if server advertises but doesn't actually support it
+      if (error.code === -32601) {
+        logger.debug("Server advertised prompts but method not found");
+        return { prompts: [] };
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * List all prompts from the server, automatically handling pagination
+   *
+   * @param options - Request options
+   * @returns Complete list of all prompts
+   */
+  async listAllPrompts(options?: RequestOptions): Promise<{
+    /** Prompts returned across all result pages. */
+    prompts: any[];
+  }> {
+    // Held across the pagination loop below: `disconnect()` clears
+    // `this.client`, and re-reading it once per page would dereference null
+    // mid-listing instead of failing on the closed transport.
+    const client = this.client;
+    if (!client) {
+      throw new Error("MCP client is not connected");
+    }
+
+    // Check if server advertises prompts capability
+    if (!this.capabilitiesCache?.prompts) {
+      logger.debug("Server does not advertise prompts capability, skipping");
+      return { prompts: [] };
+    }
+
+    try {
+      logger.debug("Listing all prompts (with auto-pagination)");
+      return await this.executeRequest(async () => {
+        const allPrompts: any[] = [];
+        const seenCursors = new Set<string>();
+        let cursor: string | undefined = undefined;
+
+        do {
+          const result: { prompts?: any[]; nextCursor?: string } =
+            await client.listPrompts(
+              cursor !== undefined ? { cursor } : undefined,
+              options
+            );
+          allPrompts.push(...(result.prompts || []));
+          cursor = result.nextCursor;
+          if (cursor !== undefined) {
+            if (seenCursors.has(cursor)) {
+              throw new Error(
+                "prompts/list returned a repeated pagination cursor"
+              );
+            }
+            seenCursors.add(cursor);
+          }
+        } while (cursor);
+
+        return { prompts: allPrompts };
+      });
     } catch (err: unknown) {
       const error = err as Error & { code?: number };
       // Gracefully handle if server advertises but doesn't actually support it
