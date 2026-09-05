@@ -79,8 +79,6 @@ export interface ProxyConnection {
     uri: string,
     options?: ProxyRequestOptions
   ): Promise<ReadResourceResult>;
-  /** List upstream prompts, including pagination when supported. */
-  listAllPrompts?(): Promise<{ prompts: ProxyPrompt[] }>;
   /** List upstream prompts. */
   listPrompts(): Promise<{ prompts: ProxyPrompt[] }>;
   /** Render an upstream prompt. */
@@ -324,11 +322,7 @@ async function introspect(
   let prompts: ProxyPrompt[] = [];
   if (supports(connection, "prompts")) {
     try {
-      if (connection.listAllPrompts !== undefined) {
-        prompts = (await connection.listAllPrompts()).prompts;
-      } else if (connection.listPrompts !== undefined) {
-        prompts = (await connection.listPrompts()).prompts;
-      }
+      prompts = (await connection.listPrompts()).prompts;
     } catch (error) {
       proxyDiagnostic(
         `Failed to introspect prompts from upstream MCP server "${namespace}"`,
