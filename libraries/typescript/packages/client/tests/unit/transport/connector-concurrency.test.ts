@@ -173,7 +173,10 @@ describe("Connector lifecycle concurrency", () => {
       // Trigger disconnect while connect is in flight
       const disconnectPromise = connector.disconnect();
 
-      await Promise.all([connectPromise, disconnectPromise]);
+      await expect(connectPromise).rejects.toThrow(
+        "Connection cancelled by disconnect"
+      );
+      await expect(disconnectPromise).resolves.toBeUndefined();
 
       // State must be cleanly disconnected
       expect(connector.isConnected).toBe(false);

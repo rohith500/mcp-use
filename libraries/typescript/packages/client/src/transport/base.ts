@@ -492,7 +492,7 @@ export abstract class BaseConnector {
       try {
         await this.establishTransport();
         if (this.disconnectPromise) {
-          return;
+          throw new Error("Connection cancelled by disconnect");
         }
         this.connected = true;
       } catch (err) {
@@ -566,6 +566,7 @@ export abstract class BaseConnector {
     }
 
     const currentDisconnect = (async () => {
+      let connectFailed = false;
       try {
         // If a connection attempt is in flight, await it first so that partial
         // or just-created resources are settled and safely cleaned up.
@@ -573,12 +574,14 @@ export abstract class BaseConnector {
           try {
             await this.connectPromise;
           } catch {
-            // Failure in connect() already invokes cleanupResources()
+            connectFailed = true;
           }
         }
 
-        logger.debug("Disconnecting from MCP implementation");
-        await this.cleanupResources();
+        if (!connectFailed) {
+          logger.debug("Disconnecting from MCP implementation");
+          await this.cleanupResources();
+        }
         this.connected = false;
         logger.debug("Disconnected from MCP implementation");
       } finally {
