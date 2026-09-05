@@ -140,6 +140,8 @@ export abstract class BaseConnector {
   protected serverInfoCache: MCPServerInfo | null = null;
   protected authorizationCache: MCPAuthorizationInfo | undefined;
   protected connected = false;
+  private connectPromise: Promise<void> | null = null;
+  private disconnectPromise: Promise<void> | null = null;
   protected readonly opts: ConnectorInitOptions;
   protected notificationHandlers: NotificationHandler[] = [];
   protected rootsCache: Root[] = [];
@@ -466,9 +468,51 @@ export abstract class BaseConnector {
   /**
    * Establishes the transport connection and creates the SDK client.
    *
+   * Coalesces concurrent connection attempts, synchronizes with ongoing
+   * disconnections, and guarantees that orphaned processes or transports
+   * are not leaked on failure or rapid disconnect.
+   *
    * @returns A promise that resolves when the connector is connected.
    */
-  abstract connect(): Promise<void>;
+  async connect(): Promise<void> {
+    while (this.disconnectPromise) {
+      await this.disconnectPromise;
+    }
+
+    if (this.connected) {
+      logger.debug("Already connected to MCP implementation");
+      return;
+    }
+
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
+
+    const currentConnect = (async () => {
+      try {
+        await this.establishTransport();
+        if (this.disconnectPromise) {
+          return;
+        }
+        this.connected = true;
+      } catch (err) {
+        this.connected = false;
+        await this.cleanupResources();
+        throw err;
+      } finally {
+        this.connectPromise = null;
+      }
+    })();
+
+    this.connectPromise = currentConnect;
+    return this.connectPromise;
+  }
+
+  /**
+   * Subclasses override this method to perform transport-specific connection logic.
+   * Default implementation is a no-op for backwards compatibility.
+   */
+  protected async establishTransport(): Promise<void> {}
 
   /**
    * Returns transport-specific fields suitable for logs and telemetry.
@@ -506,18 +550,44 @@ export abstract class BaseConnector {
   /**
    * Disconnects the SDK client and releases transport resources.
    *
+   * Coalesces concurrent calls and coordinates with in-flight connections
+   * to ensure no child processes or transports are orphaned.
+   *
    * @returns A promise that resolves after cleanup completes.
    */
   async disconnect(): Promise<void> {
-    if (!this.connected) {
+    if (this.disconnectPromise) {
+      return this.disconnectPromise;
+    }
+
+    if (!this.connected && !this.connectPromise) {
       logger.debug("Not connected to MCP implementation");
       return;
     }
 
-    logger.debug("Disconnecting from MCP implementation");
-    await this.cleanupResources();
-    this.connected = false;
-    logger.debug("Disconnected from MCP implementation");
+    const currentDisconnect = (async () => {
+      try {
+        // If a connection attempt is in flight, await it first so that partial
+        // or just-created resources are settled and safely cleaned up.
+        if (this.connectPromise) {
+          try {
+            await this.connectPromise;
+          } catch {
+            // Failure in connect() already invokes cleanupResources()
+          }
+        }
+
+        logger.debug("Disconnecting from MCP implementation");
+        await this.cleanupResources();
+        this.connected = false;
+        logger.debug("Disconnected from MCP implementation");
+      } finally {
+        this.disconnectPromise = null;
+      }
+    })();
+
+    this.disconnectPromise = currentDisconnect;
+    return this.disconnectPromise;
   }
 
   /** Whether an SDK client currently exists for this connector. */
