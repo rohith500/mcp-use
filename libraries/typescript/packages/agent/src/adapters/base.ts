@@ -222,8 +222,12 @@ export abstract class BaseAdapter<T> {
     }
 
     try {
-      // Get prompts from connector (using listAllPrompts for complete pagination)
-      const promptsResult = await connector.listAllPrompts();
+      // Get prompts from connector (using listAllPrompts if available for complete pagination)
+      const duck = connector as Partial<BaseConnector>;
+      const promptsResult =
+        typeof duck.listAllPrompts === "function"
+          ? await duck.listAllPrompts()
+          : await connector.listPrompts();
       const prompts = promptsResult?.prompts || [];
 
       // Convert and collect prompts
