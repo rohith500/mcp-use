@@ -145,6 +145,40 @@ describe("listPrompts and listAllPrompts", () => {
       );
     });
 
+    it("follows empty-string cursor without premature termination", async () => {
+      const connector = new TestConnector() as BaseConnector & {
+        client: unknown;
+        capabilitiesCache: unknown;
+      };
+      connector.capabilitiesCache = { prompts: {} };
+
+      const listPromptsMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          prompts: [{ name: "prompt-1" }],
+          nextCursor: "",
+        })
+        .mockResolvedValueOnce({
+          prompts: [{ name: "prompt-2" }],
+          nextCursor: undefined,
+        });
+
+      connector.client = { listPrompts: listPromptsMock };
+
+      const result = await connector.listAllPrompts();
+
+      expect(result).toEqual({
+        prompts: [{ name: "prompt-1" }, { name: "prompt-2" }],
+      });
+      expect(listPromptsMock).toHaveBeenCalledTimes(2);
+      expect(listPromptsMock).toHaveBeenNthCalledWith(1, undefined, undefined);
+      expect(listPromptsMock).toHaveBeenNthCalledWith(
+        2,
+        { cursor: "" },
+        undefined
+      );
+    });
+
     it("detects repeated cursor and throws error to prevent infinite loop", async () => {
       const connector = new TestConnector() as BaseConnector & {
         client: unknown;

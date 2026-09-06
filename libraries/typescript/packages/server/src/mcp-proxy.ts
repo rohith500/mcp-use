@@ -322,7 +322,14 @@ async function introspect(
   let prompts: ProxyPrompt[] = [];
   if (supports(connection, "prompts")) {
     try {
-      prompts = (await connection.listPrompts()).prompts;
+      const duck = connection as {
+        listAllPrompts?: () => Promise<{ prompts: ProxyPrompt[] }>;
+      };
+      if (typeof duck.listAllPrompts === "function") {
+        prompts = (await duck.listAllPrompts()).prompts;
+      } else {
+        prompts = (await connection.listPrompts()).prompts;
+      }
     } catch (error) {
       proxyDiagnostic(
         `Failed to introspect prompts from upstream MCP server "${namespace}"`,

@@ -346,6 +346,48 @@ describe("MCPServer.proxy", () => {
     );
   });
 
+  it("prefers listAllPrompts over listPrompts when present on upstream connection", async () => {
+    const parent = new MCPServer({ name: "parent", version: "1.0.0" });
+    servers.push(parent);
+    const listPromptsSpy = vi.fn().mockResolvedValue({
+      prompts: [{ name: "page1" }],
+    });
+    const listAllPromptsSpy = vi.fn().mockResolvedValue({
+      prompts: [{ name: "page1" }, { name: "page2" }],
+    });
+    const connection = {
+      info: { server: { name: "upstream" } },
+      async listTools() {
+        return [];
+      },
+      async callTool() {
+        return { content: [] };
+      },
+      async readResource(uri: string) {
+        return { contents: [{ uri, text: "upstream" }] };
+      },
+      listPrompts: listPromptsSpy,
+      listAllPrompts: listAllPromptsSpy,
+      async getPrompt() {
+        return { messages: [] };
+      },
+    };
+
+    await expect(parent.proxy(connection as any)).resolves.toBeUndefined();
+    const { url: parentUrl } = await parent.listen(0);
+    const client = await connectClient(parentUrl);
+    clients.push(client);
+
+    const { prompts } = await client.listPrompts();
+    expect(prompts).toHaveLength(2);
+    expect(prompts.map((p) => p.name)).toEqual([
+      "upstream_page1",
+      "upstream_page2",
+    ]);
+    expect(listAllPromptsSpy).toHaveBeenCalledTimes(1);
+    expect(listPromptsSpy).not.toHaveBeenCalled();
+  });
+
   it("rejects a direct anonymous connection without a proxy namespace", async () => {
     const parent = new MCPServer({ name: "parent", version: "1.0.0" });
     servers.push(parent);

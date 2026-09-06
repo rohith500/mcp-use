@@ -952,7 +952,7 @@ export abstract class BaseConnector {
             }
             seenCursors.add(cursor);
           }
-        } while (cursor);
+        } while (cursor !== undefined);
 
         return { prompts: allPrompts };
       });
