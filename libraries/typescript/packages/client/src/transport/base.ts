@@ -752,14 +752,26 @@ export abstract class BaseConnector {
       logger.debug("Listing all resources (with auto-pagination)");
       return await this.executeRequest(async () => {
         const allResources: any[] = [];
+        const seenCursors = new Set<string>();
         let cursor: string | undefined = undefined;
 
         do {
           const result: { resources?: any[]; nextCursor?: string } =
-            await client.listResources({ cursor }, options);
+            await client.listResources(
+              cursor !== undefined ? { cursor } : undefined,
+              options
+            );
           allResources.push(...(result.resources || []));
           cursor = result.nextCursor;
-        } while (cursor);
+          if (cursor !== undefined) {
+            if (seenCursors.has(cursor)) {
+              throw new Error(
+                "resources/list returned a repeated pagination cursor"
+              );
+            }
+            seenCursors.add(cursor);
+          }
+        } while (cursor !== undefined);
 
         return { resources: allResources };
       });
